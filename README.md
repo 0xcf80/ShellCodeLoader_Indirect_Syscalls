@@ -1,7 +1,7 @@
 # ShellCodeLoader_Indirect_Syscalls
 Shellcode Loader using indirect syscalls
 
-Highly inspired (read: stolen) from the following projects:
+Highly inspired (read: "stolen") from the following projects:
 * BokuLoader: https://github.com/boku7/BokuLoader/tree/main
 * HellsGate: https://github.com/am0nsec/HellsGate/tree/master
 
@@ -16,3 +16,7 @@ At a high level the loader re-implements HellsGate but uses indirect instead of 
 * API Hashing
 * more sophisticated shellcode loading routines
 * probably more
+* (manually map ntdll)
+
+# NB
+* This was developed for educational purposes only, use at your own risk
