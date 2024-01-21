@@ -2,7 +2,8 @@
 # encoding: utf-8
 
 dlls = [
-    'ntdll'
+    'ntdll.dll',
+    'KERNEL32.DLL'
 ]
 
 functions = [

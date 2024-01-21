@@ -14,6 +14,45 @@ DWORD runtime_hash(unsigned char* str)
     return hash;
 }
 
+// Get a handle to a loaded DLL (by Hash)
+// https://revers.engineering/custom-getprocaddress-and-getmodulehandle-implementation-x64/
+HMODULE GetModuleHandleByHash(DWORD module_hash) {
+    
+    HMODULE module_base = NULL;
+    //PPEB pPEB = getPEB();
+    PPEB pPEB = (PPEB)(__readgsqword(0x60));
+    //DEBUG_PRINT("PEB at %p\n", pPEB);
+    PPEB_LDR_DATA pLDR = pPEB->Ldr;
+    PLIST_ENTRY pModuleList = &(pLDR->InMemoryOrderModuleList);
+
+    // https://learn.microsoft.com/de-de/cpp/c-runtime-library/reference/wcstombs-s-wcstombs-s-l?view=msvc-170
+    PMY_LDR_DATA_TABLE_ENTRY currentModule = NULL;
+    PLIST_ENTRY currentEntry = pModuleList->Flink;
+    PLIST_ENTRY firstEntry = pModuleList;
+    CHAR cstr_module_name[256] = { 0 };
+    // in a double linked list, the last entry points to the first one
+    while (currentEntry->Flink != firstEntry)
+    {
+        currentModule = (PMY_LDR_DATA_TABLE_ENTRY)currentEntry;
+        // https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/wcstombs-s-wcstombs-s-l?view=msvc-170
+        wcstombs_s(NULL, cstr_module_name, sizeof(cstr_module_name), currentModule->FullDllName.Buffer, currentModule->FullDllName.Length - 1);
+        DEBUG_PRINT("Found DLL %s. Base:%p\n", cstr_module_name, currentModule->InInitializationOrderLinks.Flink);
+
+        if (module_hash == runtime_hash(cstr_module_name)) {
+            DEBUG_PRINT("Found DLL %s for hash 0x%x. Base: %p\n", cstr_module_name, module_hash, (HMODULE)currentModule->InInitializationOrderLinks.Flink);
+            // Actually this should work, but it does return a wrong address?!
+            //return (HMODULE)currentModule->DllBase;
+            return (HMODULE)currentModule->InInitializationOrderLinks.Flink;
+        }
+
+        //wprintf(L"Module: %s\n", currentModule->FullDllName.Buffer);
+        
+        currentEntry = currentEntry->Flink;
+        
+    }
+    return NULL;
+}
+
 // Resolve API function by function hash. Generate the API hashes using create_api_hashes.py
 // https://www.ired.team/offensive-security/defense-evasion/windows-api-hashing-in-malware
 // TODO: Create a compiletime_hash Macro to generate the functions dynamically during build
@@ -50,13 +89,13 @@ LPVOID GetProcAddressByHash(HMODULE hModule, DWORD function_hash) {
         {
             functionAddressRVA = addresOfFunctionsRVA[addressOfNameOrdinalsRVA[i]];
             proc = (PDWORD)((DWORD_PTR)hModule + functionAddressRVA);
-            DEBUG_PRINT("%s : 0x%x : %p\n", functionName, functionNameHash, proc);
+            DEBUG_PRINT("FuncName: %s - FuncHash: 0x%x - Ptr: %p\n", functionName, functionNameHash, proc);
             return proc;
         }
     }
     // fail
     if (proc == NULL) {
-        DEBUG_PRINT("Failed to resolve function for hash %p!\n", function_hash);
+        DEBUG_PRINT("Failed to resolve function for hash 0x%x!\n", function_hash);
     }
     return proc;
 }
