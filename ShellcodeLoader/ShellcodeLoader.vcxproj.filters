@@ -29,6 +29,9 @@
     <ClInclude Include="WinApiReImplementations.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="shellcode.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <MASM Include="Syscalls.asm">

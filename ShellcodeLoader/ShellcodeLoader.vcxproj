@@ -133,6 +133,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="ShellCodeLoader.h" />
+    <ClInclude Include="shellcode.h" />
     <ClInclude Include="WinApiReImplementations.h" />
   </ItemGroup>
   <ItemGroup>

@@ -16,7 +16,6 @@ DWORD runtime_hash(unsigned char* str)
 
 // Resolve API function by function hash. Generate the API hashes using create_api_hashes.py
 // https://www.ired.team/offensive-security/defense-evasion/windows-api-hashing-in-malware
-// TODO: Create a compiletime_hash Macro to generate the functions dynamically during build
 LPVOID GetProcAddressByHash(HMODULE hModule, DWORD function_hash) {
     LPVOID proc = NULL;
     // Get base address of the module in which our exported function of interest resides (kernel32 in the case of CreateThread)
